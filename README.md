@@ -54,9 +54,10 @@ daily-motivation-bot/
 ## How It Works
 
 1. GitHub Actions triggers `main.py` on a schedule (or manually).
-2. The script sends a request to the Google Gemini API (the `gemini-2.0-flash` model). The system prompt tells the model to write one short, original, encouraging message for someone learning software engineering, in natural English, around 80–150 words, never toxic, repetitive, or cheesy.
-3. A random topic (e.g. "overcoming a difficult bug", "technical interviews", "staying consistent") is added to the request each time, so the daily messages don't all sound alike.
-4. The generated text is wrapped in a simple template:
+2. The script sends a request to the Google Gemini API (the `gemini-3.5-flash-lite` model). The system prompt asks for exactly 2 or 3 short sentences, a maximum of 45 words, and no greeting, sign-off, lists, or markdown — just the motivational text itself.
+3. Since the model doesn't always follow that exactly, the response is checked in code (`is_valid_motivational_text()`): it must have 2–3 sentences and no more than 45 words. If it fails that check, the script asks Gemini once more with a stricter correction prompt. If it's still invalid after that, the text is safely shortened in code (`shorten_to_limits()`) rather than sent as-is. As a final safety net, `limit_message_length()` also guarantees the message never exceeds 300 characters.
+4. A random topic (e.g. "overcoming a difficult bug", "technical interviews", "staying consistent") is added to the request each time, so the daily messages don't all sound alike.
+5. The generated text is wrapped in a simple template:
 
    ```
    🚀 Good morning!
@@ -65,7 +66,7 @@ daily-motivation-bot/
 
    Have an amazing day! ❤️
    ```
-5. The final message is sent to your Telegram chat via the Telegram Bot API.
+6. The final message is sent to your Telegram chat via the Telegram Bot API.
 
 ## Setup
 
@@ -136,13 +137,7 @@ The workflow at [.github/workflows/tests.yml](.github/workflows/tests.yml) runs 
 ```
 🚀 Good morning!
 
-Every bug you fix today is proof that you're getting sharper, even when
-it doesn't feel that way. Debugging is not a sign you're behind — it's
-the actual work of becoming a better engineer. Take it one clue at a
-time, test your assumptions, and don't rush past the parts you don't
-fully understand yet. The developers you admire got there by sitting
-with problems just like this one, not by avoiding them. Show up, stay
-curious, and let today's small progress add up.
+You do not need to solve everything today. Make one small improvement, learn from one mistake, and keep moving.
 
 Have an amazing day! ❤️
 ```

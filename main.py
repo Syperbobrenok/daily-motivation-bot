@@ -5,7 +5,9 @@ from __future__ import annotations
 import logging
 import os
 import random
+import re
 import sys
+import textwrap
 from dataclasses import dataclass
 
 import requests
@@ -21,15 +23,29 @@ TELEGRAM_URL_TEMPLATE = "https://api.telegram.org/bot{token}/sendMessage"
 
 GEMINI_MODEL = "gemini-3.5-flash-lite"
 REQUEST_TIMEOUT_SECONDS = 30
+MAX_MESSAGE_LENGTH = 300
+MAX_WORDS = 45
+MIN_SENTENCES = 2
+MAX_SENTENCES = 3
 
 SYSTEM_PROMPT = (
-    "You are a supportive mentor writing a short morning message for someone "
-    "learning software engineering. Write one original motivational message. "
-    "It must be encouraging, positive, realistic, and written in natural "
-    "English. Never be toxic, repetitive, or cheesy, and avoid generic "
-    "clichés. Keep it around 80-150 words. Write only the message itself, "
-    "with no greeting and no sign-off."
+    "You are a supportive mentor writing a short daily message for someone "
+    "learning software engineering. Be encouraging, positive, and realistic. "
+    "Never be toxic, repetitive, or cheesy, and avoid generic clichés. "
+    "Write exactly 2 or 3 short sentences, with a maximum of 45 words in "
+    "total. Do not write long compound sentences, lists, or headings. "
+    "Return only the motivational text itself: no introduction, no "
+    "conclusion, no greeting, no sign-off, and no markdown."
 )
+
+RETRY_INSTRUCTION = (
+    "Your previous response did not follow the required format. Rewrite it "
+    "as exactly 2 or 3 short sentences, with a maximum of 45 words in "
+    "total. Do not include a greeting, sign-off, lists, headings, or "
+    "markdown. Return only the motivational text."
+)
+
+SENTENCE_END_PATTERN = re.compile(r"(?<=[.!?])\s+")
 
 TOPICS = [
     "learning programming",
@@ -76,9 +92,41 @@ class Config:
         return cls(**values)
 
 
-def generate_motivational_message(api_key: str) -> str:
-    topic = random.choice(TOPICS)
-    user_prompt = f"Write today's motivational message, focusing especially on {topic}."
+def limit_message_length(text: str, max_length: int = MAX_MESSAGE_LENGTH) -> str:
+    return textwrap.shorten(text, width=max_length, placeholder="...")
+
+
+def count_words(text: str) -> int:
+    return len(text.split())
+
+
+def split_into_sentences(text: str) -> list[str]:
+    sentences = SENTENCE_END_PATTERN.split(text.strip())
+    return [sentence for sentence in sentences if sentence]
+
+
+def count_sentences(text: str) -> int:
+    return len(split_into_sentences(text))
+
+
+def is_valid_motivational_text(text: str) -> bool:
+    sentence_count = count_sentences(text)
+    word_count = count_words(text)
+    return MIN_SENTENCES <= sentence_count <= MAX_SENTENCES and word_count <= MAX_WORDS
+
+
+def shorten_to_limits(text: str) -> str:
+    sentences = split_into_sentences(text)[:MAX_SENTENCES]
+    shortened = " ".join(sentences)
+
+    words = shortened.split()
+    if len(words) > MAX_WORDS:
+        shortened = " ".join(words[:MAX_WORDS]) + "."
+
+    return shortened
+
+
+def request_motivational_text(api_key: str, user_prompt: str) -> str:
     payload = {
         "system_instruction": {"parts": [{"text": SYSTEM_PROMPT}]},
         "contents": [{"role": "user", "parts": [{"text": user_prompt}]}],
@@ -94,6 +142,24 @@ def generate_motivational_message(api_key: str) -> str:
     data = response.json()
 
     return data["candidates"][0]["content"]["parts"][0]["text"].strip()
+
+
+def generate_motivational_message(api_key: str) -> str:
+    topic = random.choice(TOPICS)
+    user_prompt = f"Write today's motivational message, focusing especially on {topic}."
+
+    text = request_motivational_text(api_key, user_prompt)
+
+    if not is_valid_motivational_text(text):
+        logger.info("Response did not match the required format, retrying")
+        retry_prompt = f"{user_prompt} {RETRY_INSTRUCTION}"
+        text = request_motivational_text(api_key, retry_prompt)
+
+    if not is_valid_motivational_text(text):
+        logger.info("Retry still did not match the required format, shortening it")
+        text = shorten_to_limits(text)
+
+    return limit_message_length(text)
 
 
 def build_message(motivational_text: str) -> str:
