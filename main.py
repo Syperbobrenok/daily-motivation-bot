@@ -16,10 +16,10 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-OPENAI_URL = "https://api.openai.com/v1/chat/completions"
+GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 TELEGRAM_URL_TEMPLATE = "https://api.telegram.org/bot{token}/sendMessage"
 
-OPENAI_MODEL = "gpt-4o-mini"
+GEMINI_MODEL = "gemini-2.0-flash"
 REQUEST_TIMEOUT_SECONDS = 30
 
 SYSTEM_PROMPT = (
@@ -49,14 +49,14 @@ class ConfigError(Exception):
 
 @dataclass
 class Config:
-    openai_api_key: str
+    gemini_api_key: str
     telegram_token: str
     telegram_chat_id: str
 
     @classmethod
     def from_env(cls) -> "Config":
         required_vars = {
-            "OPENAI_API_KEY": "openai_api_key",
+            "GEMINI_API_KEY": "gemini_api_key",
             "TELEGRAM_TOKEN": "telegram_token",
             "TELEGRAM_CHAT_ID": "telegram_chat_id",
         }
@@ -80,22 +80,20 @@ def generate_motivational_message(api_key: str) -> str:
     topic = random.choice(TOPICS)
     user_prompt = f"Write today's motivational message, focusing especially on {topic}."
     payload = {
-        "model": OPENAI_MODEL,
-        "messages": [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": user_prompt},
-        ],
-        "temperature": 1.0,
+        "system_instruction": {"parts": [{"text": SYSTEM_PROMPT}]},
+        "contents": [{"role": "user", "parts": [{"text": user_prompt}]}],
+        "generationConfig": {"temperature": 1.0},
     }
-    headers = {"Authorization": f"Bearer {api_key}"}
+    headers = {"x-goog-api-key": api_key}
+    url = f"{GEMINI_API_URL}/{GEMINI_MODEL}:generateContent"
 
     response = requests.post(
-        OPENAI_URL, json=payload, headers=headers, timeout=REQUEST_TIMEOUT_SECONDS
+        url, json=payload, headers=headers, timeout=REQUEST_TIMEOUT_SECONDS
     )
     response.raise_for_status()
     data = response.json()
 
-    return data["choices"][0]["message"]["content"].strip()
+    return data["candidates"][0]["content"]["parts"][0]["text"].strip()
 
 
 def build_message(motivational_text: str) -> str:
@@ -114,7 +112,7 @@ def main() -> None:
         config = Config.from_env()
 
         logger.info("Generating motivational message")
-        motivational_text = generate_motivational_message(config.openai_api_key)
+        motivational_text = generate_motivational_message(config.gemini_api_key)
 
         message = build_message(motivational_text)
         logger.info("Sending Telegram message")

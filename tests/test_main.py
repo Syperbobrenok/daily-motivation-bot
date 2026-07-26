@@ -1,6 +1,6 @@
 """Tests for the deterministic parts of main.py.
 
-These tests do not call OpenAI or Telegram. The generated motivational
+These tests do not call Gemini or Telegram. The generated motivational
 text itself is not deterministic, so it is not tested here.
 """
 
@@ -28,29 +28,29 @@ def test_build_message_handles_multiline_text():
 
 
 def test_config_from_env_reads_all_values(monkeypatch):
-    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    monkeypatch.setenv("GEMINI_API_KEY", "gemini-test-key")
     monkeypatch.setenv("TELEGRAM_TOKEN", "telegram-test")
     monkeypatch.setenv("TELEGRAM_CHAT_ID", "12345")
 
     config = Config.from_env()
 
-    assert config.openai_api_key == "sk-test"
+    assert config.gemini_api_key == "gemini-test-key"
     assert config.telegram_token == "telegram-test"
     assert config.telegram_chat_id == "12345"
 
 
 def test_config_from_env_strips_whitespace(monkeypatch):
-    monkeypatch.setenv("OPENAI_API_KEY", "  sk-test  ")
+    monkeypatch.setenv("GEMINI_API_KEY", "  gemini-test-key  ")
     monkeypatch.setenv("TELEGRAM_TOKEN", "telegram-test")
     monkeypatch.setenv("TELEGRAM_CHAT_ID", "12345")
 
     config = Config.from_env()
 
-    assert config.openai_api_key == "sk-test"
+    assert config.gemini_api_key == "gemini-test-key"
 
 
 def test_config_from_env_missing_variable_raises_config_error(monkeypatch):
-    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     monkeypatch.setenv("TELEGRAM_TOKEN", "telegram-test")
     monkeypatch.setenv("TELEGRAM_CHAT_ID", "12345")
 
@@ -59,13 +59,13 @@ def test_config_from_env_missing_variable_raises_config_error(monkeypatch):
 
 
 def test_config_from_env_missing_variables_are_listed_by_name(monkeypatch):
-    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     monkeypatch.delenv("TELEGRAM_TOKEN", raising=False)
     monkeypatch.delenv("TELEGRAM_CHAT_ID", raising=False)
 
     with pytest.raises(ConfigError) as exc_info:
         Config.from_env()
 
-    assert "OPENAI_API_KEY" in str(exc_info.value)
+    assert "GEMINI_API_KEY" in str(exc_info.value)
     assert "TELEGRAM_TOKEN" in str(exc_info.value)
     assert "TELEGRAM_CHAT_ID" in str(exc_info.value)
